@@ -1,97 +1,187 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Zohort React Native Product App
 
-# Getting Started
+A modern React Native application built with TypeScript that displays products from the FakeStore API with navigation between a product list and detail screens.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Features
 
-## Step 1: Start Metro
+- ✅ React Native 0.82.1 (latest)
+- ✅ TypeScript support
+- ✅ React Navigation v6 with Stack Navigator
+- ✅ Axios for API calls
+- ✅ FakeStore API integration
+- ✅ Modern, responsive UI design
+- ✅ Proper folder structure
+- ✅ Type-safe navigation
+- ✅ Android support
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Project Structure
 
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+```
+src/
+├── components/       # Reusable UI components
+├── screens/          # Screen components
+│   ├── ProductListScreen.tsx    # Home screen with product list
+│   └── ProductDetailScreen.tsx  # Product detail view
+├── services/         # API services
+│   └── api.ts        # Axios API client and product service
+├── types/            # TypeScript type definitions
+│   ├── product.types.ts       # Product & Rating types
+│   └── navigation.types.ts    # Navigation types
+├── navigation/       # Navigation configuration
+│   └── AppNavigator.tsx       # Stack navigator setup
+└── utils/            # Utility functions
 ```
 
-## Step 2: Build and run your app
+## API Integration
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+The app uses the FakeStore API: https://fakestoreapi.com/products
+
+Product object structure:
+```typescript
+{
+  id: number;
+  title: string;
+  price: number;
+  description: string;
+  category: string;
+  image: string;
+  rating: {
+    rate: number;
+    count: number;
+  }
+}
+```
+
+## Prerequisites
+
+- Node.js (v16 or higher)
+- npm or yarn
+- Android Studio (for Android development)
+- Android SDK
+- Java Development Kit (JDK 17)
+
+## Installation
+
+1. Navigate to the project directory:
+```bash
+cd ZohortApp
+```
+
+2. Install dependencies:
+```bash
+npm install
+```
+
+3. For Android, ensure you have Android SDK installed and configured.
+
+## Running the App
 
 ### Android
 
-```sh
-# Using npm
+1. Start Metro Bundler:
+```bash
+npm start
+```
+
+2. In a new terminal, run the Android app:
+```bash
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### iOS
-
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+Or use React Native CLI:
+```bash
+npx react-native run-android
 ```
 
-Then, and every time you update your native dependencies, run:
+Make sure you have:
+- An Android emulator running, OR
+- An Android device connected via USB with USB debugging enabled
 
-```sh
-bundle exec pod install
+## Screens
+
+### Product List Screen
+- Displays all products in a scrollable list
+- Shows product image, title, category, price, and rating
+- Tap any product to view details
+- Loading indicator while fetching data
+- Error handling with retry option
+
+### Product Detail Screen
+- Shows full product image
+- Displays complete product information
+- Category badge
+- Rating with review count
+- Full description
+- Add to Cart button (placeholder)
+- Back navigation to product list
+
+## Dependencies
+
+### Core
+- `react-native`: ^0.82.1
+- `react`: 18.3.1
+
+### Navigation
+- `@react-navigation/native`: Latest
+- `@react-navigation/stack`: Latest
+- `react-native-gesture-handler`: Latest
+- `react-native-screens`: Latest
+- `react-native-safe-area-context`: Latest
+
+### API & Utilities
+- `axios`: Latest
+
+### Development
+- `typescript`: Latest
+- `@types/react`: Latest
+- `@types/react-native`: Latest
+- `@types/react-navigation`: Latest
+
+## TypeScript Configuration
+
+The project uses strict TypeScript configuration with proper typing for:
+- Component props
+- Navigation parameters
+- API responses
+- State management
+
+## Troubleshooting
+
+### Metro Bundler Issues
+If you encounter bundler issues:
+```bash
+npm start -- --reset-cache
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
+### Android Build Issues
+Clean the build:
+```bash
+cd android
+./gradlew clean
+cd ..
+npm run android
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+### Clear Cache
+```bash
+npm start -- --reset-cache
+```
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+## Future Enhancements
 
-## Step 3: Modify your app
+- Add cart functionality
+- Implement product search
+- Add product filtering by category
+- Add pull-to-refresh
+- Implement offline support
+- Add product favorites
+- Implement user authentication
+- Add unit and integration tests
 
-Now that you have successfully run the app, let's make changes!
+## License
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+This project is created for the Zohort technical assessment.
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+## Author
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+Developed for Zohort - React Native Technical Task
