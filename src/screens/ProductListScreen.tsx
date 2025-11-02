@@ -1,83 +1,228 @@
-import React, {useEffect, useState} from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
-  Image,
   StyleSheet,
-  ActivityIndicator,
   SafeAreaView,
+  RefreshControl,
+  TextInput,
+  Keyboard,
+  ScrollView,
+  ListRenderItem,
 } from 'react-native';
-import {useNavigation} from '@react-navigation/native';
-import type {ProductListScreenNavigationProp} from '../types/navigation.types';
-import type {Product} from '../types/product.types';
-import {productService} from '../services/api';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import { useNavigation } from '@react-navigation/native';
+import type { ProductListScreenNavigationProp } from '../types/navigation.types';
+import type { Product } from '../types/product.types';
+import { productService } from '../services/api';
+import { ProductCard, FilterChip, ProductCardSkeleton } from '../components';
+import { colors, spacing, typography, borderRadius } from '../theme/colors';
 
 const ProductListScreen: React.FC = () => {
   const navigation = useNavigation<ProductListScreenNavigationProp>();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [categories, setCategories] = useState<string[]>([]);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchProducts();
   }, []);
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (isRefreshing: boolean = false) => {
     try {
-      setLoading(true);
+      if (!isRefreshing) {
+        setLoading(true);
+      }
       setError(null);
       const data = await productService.getAllProducts();
-      setProducts(data);
+
+      // Extract unique categories
+      const uniqueCategories = Array.from(
+        new Set(data.map(product => product.category))
+      ).sort();
+
+      setAllProducts(data);
+      setCategories(uniqueCategories);
+      setFilteredProducts(data);
     } catch (err) {
       setError('Failed to load products. Please try again.');
       console.error(err);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const handleProductPress = (product: Product) => {
-    navigation.navigate('ProductDetail', {product});
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchProducts(true);
   };
 
-  const renderProduct = ({item}: {item: Product}) => (
-    <TouchableOpacity
-      style={styles.productCard}
-      onPress={() => handleProductPress(item)}>
-      <Image source={{uri: item.image}} style={styles.productImage} />
-      <View style={styles.productInfo}>
-        <Text style={styles.productTitle} numberOfLines={2}>
-          {item.title}
-        </Text>
-        <Text style={styles.productCategory}>{item.category}</Text>
-        <View style={styles.priceRatingContainer}>
-          <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-          <View style={styles.ratingContainer}>
-            <Text style={styles.ratingText}>⭐ {item.rating.rate}</Text>
-            <Text style={styles.ratingCount}>({item.rating.count})</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
+  // Apply both search and category filters
+  const applyFilters = useCallback((search: string, category: string) => {
+    let filtered = allProducts;
+
+    // Apply category filter
+    if (category !== 'All') {
+      filtered = filtered.filter(product => product.category === category);
+    }
+
+    // Apply search filter
+    if (search.trim() !== '') {
+      filtered = filtered.filter(product =>
+        product.title.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+
+    setFilteredProducts(filtered);
+  }, [allProducts]);
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Debounce search by 300ms
+    searchTimeoutRef.current = setTimeout(() => {
+      applyFilters(query, selectedCategory);
+    }, 300);
+  };
+
+  const handleCategorySelect = useCallback((category: string) => {
+    ReactNativeHapticFeedback.trigger('impactLight', {
+      enableVibrateFallback: true,
+      ignoreAndroidSystemSettings: false,
+    });
+    setSelectedCategory(category);
+    applyFilters(searchQuery, category);
+  }, [searchQuery, applyFilters]);
+
+  const handleClearFilters = useCallback(() => {
+    ReactNativeHapticFeedback.trigger('impactLight', {
+      enableVibrateFallback: true,
+      ignoreAndroidSystemSettings: false,
+    });
+    setSearchQuery('');
+    setSelectedCategory('All');
+    setFilteredProducts(allProducts);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    Keyboard.dismiss();
+  }, [allProducts]);
+
+  const handleProductPress = useCallback((product: Product) => {
+    navigation.navigate('ProductDetail', { productId: product.id });
+  }, [navigation]);
+
+  const renderProduct: ListRenderItem<Product> = useCallback(({ item }) => (
+    <ProductCard product={item} onPress={handleProductPress} />
+  ), [handleProductPress]);
+
+  const renderSkeleton = () => (
+    <>
+      <ProductCardSkeleton />
+      <ProductCardSkeleton />
+      <ProductCardSkeleton />
+    </>
   );
 
-  if (loading) {
+  const keyExtractor = useCallback((item: Product) => item.id.toString(), []);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 360, // Approximate height of ProductCard
+    offset: 360 * index,
+    index,
+  }), []);
+
+  const renderEmptyState = () => {
+    if (searchQuery.trim() !== '' || selectedCategory !== 'All') {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyIcon}>🔍</Text>
+          <Text style={styles.emptyTitle}>No Results Found</Text>
+          <Text style={styles.emptyMessage}>
+            We couldn't find any products matching your filters.
+          </Text>
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={handleClearFilters}
+            activeOpacity={0.8}>
+            <Text style={styles.refreshButtonText}>Clear Filters</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading products...</Text>
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>📦</Text>
+        <Text style={styles.emptyTitle}>No Products Found</Text>
+        <Text style={styles.emptyMessage}>
+          We couldn't find any products at the moment.
+        </Text>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => fetchProducts()}
+          activeOpacity={0.8}>
+          <Text style={styles.refreshButtonText}>Refresh</Text>
+        </TouchableOpacity>
       </View>
+    );
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Products</Text>
+          <Text style={styles.headerSubtitle}>Loading products...</Text>
+        </View>
+        <View style={styles.searchContainer}>
+          <View style={styles.searchInputWrapper}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search products..."
+              placeholderTextColor={colors.textHint}
+              editable={false}
+            />
+          </View>
+        </View>
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterTitle}>Categories</Text>
+          </View>
+        </View>
+        <View style={styles.listContainer}>
+          {renderSkeleton()}
+        </View>
+      </SafeAreaView>
     );
   }
 
-  if (error) {
+  if (error && !refreshing) {
     return (
       <View style={styles.centerContainer}>
+        <Text style={styles.errorIcon}>⚠️</Text>
+        <Text style={styles.errorTitle}>Oops!</Text>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => fetchProducts()}
+          activeOpacity={0.8}>
+          <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
@@ -85,12 +230,105 @@ const ProductListScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Products</Text>
+        <Text style={styles.headerSubtitle}>
+          {filteredProducts.length}{' '}
+          {filteredProducts.length === 1 ? 'item' : 'items'} available
+        </Text>
+      </View>
+
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputWrapper}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search products..."
+            placeholderTextColor="#9e9e9e"
+            value={searchQuery}
+            onChangeText={handleSearch}
+            returnKeyType="search"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={handleClearFilters}
+              activeOpacity={0.7}>
+              <Text style={styles.clearButtonText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      {/* Category Filters */}
+      <View style={styles.filterSection}>
+        <View style={styles.filterHeader}>
+          <Text style={styles.filterTitle}>Categories</Text>
+          {(searchQuery.trim() !== '' || selectedCategory !== 'All') && (
+            <TouchableOpacity
+              style={styles.clearFiltersButton}
+              onPress={handleClearFilters}
+              activeOpacity={0.7}>
+              <Text style={styles.clearFiltersButtonText}>Clear All</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+          keyboardShouldPersistTaps="handled">
+          <FilterChip
+            label="All"
+            isActive={selectedCategory === 'All'}
+            onPress={() => handleCategorySelect('All')}
+            count={allProducts.length}
+          />
+          {categories.map(category => {
+            const count = allProducts.filter(p => p.category === category).length;
+            return (
+              <FilterChip
+                key={category}
+                label={category}
+                isActive={selectedCategory === category}
+                onPress={() => handleCategorySelect(category)}
+                count={count}
+              />
+            );
+          })}
+        </ScrollView>
+      </View>
+
       <FlatList
-        data={products}
+        data={filteredProducts}
         renderItem={renderProduct}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
+        keyExtractor={keyExtractor}
+        getItemLayout={getItemLayout}
+        initialNumToRender={5}
+        maxToRenderPerBatch={10}
+        windowSize={11}
+        removeClippedSubviews={true}
+        contentContainerStyle={[
+          styles.listContainer,
+          filteredProducts.length === 0 && styles.listContainerEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={renderEmptyState}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+            title="Pull to refresh"
+            titleColor={colors.textSecondary}
+          />
+        }
       />
     </SafeAreaView>
   );
@@ -99,97 +337,188 @@ const ProductListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
+  },
+  header: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  headerTitle: {
+    fontSize: typography.xxl,
+    fontWeight: typography.extrabold,
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: typography.medium,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.xxxl,
   },
   listContainer: {
-    padding: 16,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
   },
-  productCard: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 16,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: {width: 0, height: 2},
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  productImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    resizeMode: 'contain',
-  },
-  productInfo: {
-    flex: 1,
-    marginLeft: 12,
-    justifyContent: 'space-between',
-  },
-  productTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  productCategory: {
-    fontSize: 12,
-    color: '#666',
-    textTransform: 'capitalize',
-    marginBottom: 8,
-  },
-  priceRatingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  productPrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#007AFF',
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ratingText: {
-    fontSize: 14,
-    color: '#333',
-    marginRight: 4,
-  },
-  ratingCount: {
-    fontSize: 12,
-    color: '#666',
+  listContainerEmpty: {
+    flexGrow: 1,
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
+    marginTop: spacing.lg,
+    fontSize: typography.base,
+    color: colors.textSecondary,
+    fontWeight: typography.medium,
+  },
+  errorIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
+  },
+  errorTitle: {
+    fontSize: typography.xl,
+    fontWeight: typography.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   errorText: {
-    fontSize: 16,
-    color: '#d32f2f',
-    marginBottom: 16,
+    fontSize: 15,
+    color: colors.error,
+    marginBottom: spacing.xxl,
     textAlign: 'center',
-    paddingHorizontal: 32,
+    lineHeight: 22,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: 14,
+    borderRadius: borderRadius.md,
+    minWidth: 140,
   },
   retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.white,
+    fontSize: typography.base,
+    fontWeight: typography.bold,
+    textAlign: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xxxl,
+    paddingVertical: 64,
+  },
+  emptyIcon: {
+    fontSize: 80,
+    marginBottom: spacing.xl,
+  },
+  emptyTitle: {
+    fontSize: typography.xl,
+    fontWeight: typography.bold,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  emptyMessage: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xxl,
+    lineHeight: 22,
+  },
+  refreshButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 28,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
+  },
+  refreshButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: typography.semibold,
+  },
+  searchContainer: {
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  searchInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  searchIcon: {
+    fontSize: 18,
+    marginRight: spacing.sm,
+    opacity: 0.6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: typography.base,
+    color: colors.textPrimary,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  clearButton: {
+    width: 24,
+    height: 24,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: spacing.sm,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: typography.semibold,
+    lineHeight: 14,
+  },
+  filterSection: {
+    backgroundColor: colors.white,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  filterTitle: {
+    fontSize: typography.sm,
+    fontWeight: typography.bold,
+    color: colors.textPrimary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  clearFiltersButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f5f5f5',
+  },
+  clearFiltersButtonText: {
+    fontSize: 12,
+    fontWeight: typography.semibold,
+    color: colors.primary,
+  },
+  filterScrollContent: {
+    paddingHorizontal: spacing.lg,
   },
 });
 

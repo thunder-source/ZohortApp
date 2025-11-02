@@ -1,10 +1,9 @@
 import type {StackNavigationProp} from '@react-navigation/stack';
 import type {RouteProp} from '@react-navigation/native';
-import type {Product} from './product.types';
 
 export type RootStackParamList = {
   ProductList: undefined;
-  ProductDetail: {product: Product};
+  ProductDetail: {productId: number};
 };
 
 export type ProductListScreenNavigationProp = StackNavigationProp<
